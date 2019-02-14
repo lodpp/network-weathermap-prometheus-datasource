@@ -1,6 +1,15 @@
 <?php
 
-$prom_query = 'prometheus:https:localhost:9090:irate(ifHCInOctets{ifName="Gi0/1",instance="192.168.178.32"}[2m])*8:irate(ifHCOutOctets{ifName="Gi0/1",instance="192.168.178.32"}[2m])*8';
+// Assuming the prometheus query is returning a single result, in bits/second.
+
+// Query example I use to monitor Cisco Switches:
+// ` irate(ifHCInOctets{ifName="Gi0/1",instance="192.168.178.32"}[2m])*8 `
+// irate()[2m] function => delta between the last 2 points in the serie, I look
+//                         in serie up to 2mins in the past to find them. 
+// instance => the switch I want to check the interface in ( ifName )
+
+
+$prom_query = 'prometheus:https:localhost:9090:irate(ifHCInOctets{ifName="Gi0/23",instance="192.168.178.32"}[2m])*8:irate(ifHCOutOctets{ifName="Gi0/1",instance="192.168.178.32"}[2m])*8';
 
 $prom_regex_single_value = '/^prometheus\:(http|https)\:([a-zA-z0-9-_.]+)\:(\d+):([^:]+)$/';
 $prom_regex_dual_value   = '/^prometheus\:(http|https)\:([a-zA-z0-9-_.]+)\:(\d+):([^:]+)\:([^:]+)$/';
@@ -55,7 +64,7 @@ function ReadData($targetstring)
         $url = "http://$remote_host:$remote_port/api/v1/query?query=$query";
         $inbw = GetQuery($url);
 
-        $outbw = $inbw
+        $outbw = $inbw;
 	}
 
 	$data_time = time();
@@ -64,10 +73,25 @@ function ReadData($targetstring)
 
 function GetQuery($url)
 {
-    $json = file_get_contents($url);
-    $json_data = json_decode($json, true);
+	$content = file_get_contents($url);
 
-	$bw = round(intval($json_data["data"]["result"][0]["value"][1]));
+	if ($content === FALSE)
+	{
+	    $json_data = json_decode($content, true);
+		var_dump($json_data);
+		if (isset($json_data["data"]["result"][0]["value"][1]))
+		{
+			$bw = round(intval($json_data["data"]["result"][0]["value"][1]));
+		}
+		else
+		{
+			$bw = NULL;
+		}
+	}
+	else
+	{
+		$bw = NULL;
+	}
 
 	return $bw;
 }
