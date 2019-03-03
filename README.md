@@ -88,10 +88,10 @@ Target needs:
 - **series_in/series_out:** the series to look into. ( only tested with ifHCInOctets/ifHCOutOctets )
 
 Something like this for dual series
-- prometheus:proto:remote_host:remote_port:instance:intf_name:series_in:series_out
+- `prometheus:proto:remote_host:remote_port:instance:intf_name:series_in:series_out`
 
 and with a single series:
-- prometheus:proto:remote_host:remote_port:instance:intf_name:series_in
+- `prometheus:proto:remote_host:remote_port:instance:intf_name:series_in`
 
 
 ## Adding the datasource to weathermap
