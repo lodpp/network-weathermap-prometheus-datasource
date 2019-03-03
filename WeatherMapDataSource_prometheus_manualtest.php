@@ -9,14 +9,15 @@
 //                         in serie up to 2mins in the past to find them. 
 // instance    => the switch I want to check the interface in ( ifName )
 
-// single value test
-//$prom_query = 'prometheus:https:localhost:9090:irate(ifHCInOctets{ifName="Gi0/13",instance="192.168.178.32"}[2m])*8';
 
-// dual value test
-$prom_query = 'prometheus:https:localhost:9090:irate(ifHCInOctets{ifName="Gi0/13",instance="192.168.178.32"}[2m])*8:irate(ifHCOutOctets{ifName="Gi0/13",instance="192.168.178.32"}[2m])*8';
+//$prom_query = 'prometheus:http:localhost:9090:192.168.178.32:Gi0/13:ifHCInOctets:ifHCOutOctets';
+$prom_query = 'prometheus:http:localhost:9090:192.168.178.32:Gi0/13:ifHCInOctets:ifHCOutOctets';
 
-$prom_regex_single_value = '/^prometheus\:(http|https)\:([a-zA-z0-9-_.]+)\:(\d+):([^:]+)$/';
-$prom_regex_dual_value   = '/^prometheus\:(http|https)\:([a-zA-z0-9-_.]+)\:(\d+):([^:]+)\:([^:]+)$/';
+
+// regexes for single / dual value prom query
+$prom_regex_single_value = '/^prometheus\:(http|https)\:([a-zA-z0-9-_.]+)\:(\d+)\:([a-zA-z0-9-_.]+)\:([^:]+)\:([^:]+)$/';
+$prom_regex_dual_value   = '/^prometheus\:(http|https)\:([a-zA-z0-9-_.]+)\:(\d+)\:([a-zA-z0-9-_.]+)\:([^:]+)\:([^:]+)\:([^:]+)$/';
+
 
 // Parse the plugin line and recognise prom plugin
 function Recognise($targetstring)
@@ -48,28 +49,43 @@ function ReadData($targetstring)
 	    $proto       = $matches[1];
 		$remote_host = $matches[2];
 		$remote_port = $matches[3];
-		$in_query    = $matches[4];
-		$out_query   = $matches[5];
+		$instance    = $matches[4];
+		$intf        = $matches[5];
+        $in_series   = $matches[6];
+        $out_series  = $matches[7];
 
+        $url = $proto . '://' . $remote_host . ':' . $remote_port . '/api/v1/query?query=';
+
+        $in_query  = 'irate(' . $in_series  . '{ifName="' . $intf . '",instance="' . $instance . '"}[2m])*8';
+        $out_query = 'irate(' . $out_series . '{ifName="' . $intf . '",instance="' . $instance . '"}[2m])*8';
+
+        // IN
 		$query = urlencode($in_query);
-		$url = "http://$remote_host:$remote_port/api/v1/query?query=$query";
-		$inbw = GetQuery($url);
+		$call = $url . $query;
+		$inbw = GetPromData($call);
 
+        // OUT
 		$query = urlencode($out_query);
-		$url = "http://$remote_host:$remote_port/api/v1/query?query=$query";
-		$outbw = GetQuery($url);
+		$call = $url . $query;
+		$outbw = GetPromData($call);
 	}
 	elseif(preg_match($prom_regex_single_value,$targetstring,$matches))
 	{
 		// Only In query provided
-		$proto       = $matches[1];
+        $proto       = $matches[1];
         $remote_host = $matches[2];
         $remote_port = $matches[3];
-        $in_query    = $matches[4];
+        $instance    = $matches[4];
+        $intf        = $matches[5];
+        $in_series   = $matches[6];
+
+        $url = $proto . '://' . $remote_host . ':' . $remote_port . '/api/v1/query?query=';
+
+        $in_query = 'irate(' . $in_series . '{ifName="' . $intf . '",instance="' . $instance . '"}[2m])*8';
 
         $query = urlencode($in_query);
-        $url = "http://$remote_host:$remote_port/api/v1/query?query=$query";
-        $inbw = GetQuery($url);
+        $call = $url . $query;
+        $inbw = GetPromData($call);
 
         $outbw = $inbw;
 	}
@@ -78,7 +94,7 @@ function ReadData($targetstring)
     return ( array($inbw,$outbw,$data_time) );
 }
 
-function GetQuery($url)
+function GetPromData($url)
 {
 	// this is wget like :)
 	$content = file_get_contents($url);
@@ -86,7 +102,7 @@ function GetQuery($url)
 	if ($content)
 	{
 	    $json_data = json_decode($content, true);
-		//var_dump($json_data);
+
 		if (isset($json_data["data"]["result"][0]["value"][1]))
 		{
 			$bw = round(intval($json_data["data"]["result"][0]["value"][1]));
