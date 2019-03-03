@@ -180,7 +180,14 @@ Array
 This is a POC / WIP, I got not trouble putting that in production at home, no cats will be harmed if it fails.
 That being said, it's not a rock-solid code ( my first PHP code actually so..... ) so putting that in real life production might be a bit radioactive :p
 
+## Sources:
+I didn't make it on my very own, found the inspiration with those existing docs :) :  
+- Wmap manual itself https://www.network-weathermap.com/manual/0.98/pages/advanced.html#plugins
+- influxDB datasource found on github: https://github.com/guequierre/php-weathermap-influxdb
+
+## Last words ?
+
 Fell free to test, report, patch, enjoy or hate it.
 
 Cheers,
-Lodpp 
+Lodpp
