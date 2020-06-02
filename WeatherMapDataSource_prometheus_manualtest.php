@@ -11,21 +11,27 @@
 
 
 //$prom_query = 'prometheus:http:localhost:9090:192.168.178.32:Gi0/13:ifHCInOctets:ifHCOutOctets';
+//$prom_query = 'prometheus:http:localhost:9090:sum(irate(ifHCInOctets{ifAlias=~".*ae232.*",instance="192.168.178.32"}[10m]))*8:sum(irate(ifHCOutOctets{ifAlias=~".*ae232.*",instance="192.168.178.32"}[10m]))*8';
+//$prom_query = 'prometheus:http:localhost:9090:max(irate(ifHCInOctets{ifAlias=~".*ae232.*",instance="192.168.178.32"}[10m]))*8:max(irate(ifHCOutOctets{ifAlias=~".*ae232.*",instance="192.168.178.32"}[10m]))*8';
 $prom_query = 'prometheus:http:localhost:9090:192.168.178.32:Gi0/13:ifHCInOctets:ifHCOutOctets';
 
 
 // regexes for single / dual value prom query
 $prom_regex_single_value = '/^prometheus\:(http|https)\:([a-zA-z0-9-_.]+)\:(\d+)\:([a-zA-z0-9-_.]+)\:([^:]+)\:([^:]+)$/';
 $prom_regex_dual_value   = '/^prometheus\:(http|https)\:([a-zA-z0-9-_.]+)\:(\d+)\:([a-zA-z0-9-_.]+)\:([^:]+)\:([^:]+)\:([^:]+)$/';
+$prom_regex_single_query = '/^prometheus\:(http|https)\:([a-zA-z0-9-_.]+)\:(\d+)\:([^:]+)$/';
+$prom_regex_dual_query   = '/^prometheus\:(http|https)\:([a-zA-z0-9-_.]+)\:(\d+)\:([^:]+)\:([^:]+)$/';
 
 
 // Parse the plugin line and recognise prom plugin
 function Recognise($targetstring)
 {
-    global $prom_regex_single_value, $prom_regex_dual_value;
+    global $prom_regex_single_value, $prom_regex_dual_value, $prom_regex_single_query, $prom_regex_dual_query;
 
     if( preg_match($prom_regex_single_value,$targetstring,$matches) ||
-        preg_match($prom_regex_dual_value,$targetstring,$matches) )
+        preg_match($prom_regex_dual_value,$targetstring,$matches) ||
+        preg_match($prom_regex_single_query,$targetstring,$matches) ||
+        preg_match($prom_regex_dual_query,$targetstring,$matches) )
     {
         return TRUE;
     }
@@ -37,7 +43,7 @@ function Recognise($targetstring)
 
 function ReadData($targetstring)
 {
-	global $prom_regex_single_value, $prom_regex_dual_value;
+    global $prom_regex_single_value, $prom_regex_dual_value, $prom_regex_single_query, $prom_regex_dual_query;
 
     $inbw = NULL;
     $outbw = NULL;
@@ -89,6 +95,44 @@ function ReadData($targetstring)
 
         $outbw = $inbw;
 	}
+    elseif(preg_match($prom_regex_dual_query,$targetstring,$matches))
+    {
+        // In and Out as free Prometheus queries
+        $proto       = $matches[1];
+        $remote_host = $matches[2];
+        $remote_port = $matches[3];
+        $in_query    = $matches[4];
+        $out_query   = $matches[5];
+
+        $url = $proto . '://' . $remote_host . ':' . $remote_port . '/api/v1/query?query=';
+
+        // IN
+        $query = urlencode($in_query);
+        $call = $url . $query;
+        $inbw = GetPromData($call);
+
+        // OUT
+        $query = urlencode($out_query);
+        $call = $url . $query;
+        $outbw = GetPromData($call);
+
+    }
+    elseif(preg_match($prom_regex_single_query,$targetstring,$matches))
+    {
+        // In and Out as free Prometheus queries
+        $proto       = $matches[1];
+        $remote_host = $matches[2];
+        $remote_port = $matches[3];
+        $in_query    = $matches[4];
+
+        $url = $proto . '://' . $remote_host . ':' . $remote_port . '/api/v1/query?query=';
+
+        $query = urlencode($in_query);
+        $call = $url . $query;
+        $inbw = GetPromData($call);
+
+        $outbw = $inbw;
+    }
 
 	$data_time = time();
     return ( array($inbw,$outbw,$data_time) );

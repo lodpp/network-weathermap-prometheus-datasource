@@ -81,10 +81,10 @@ you have a x8 multiplier at the end.
 Target needs:
 - **datasource:** prometheus
 - **proto:** http|https
-- **remote_host:** address of the prometheus database. ( only tested with IP )
-- **remote_port:** port on which the prometheus database listen to.
-- **instance:** the SNMP target you looking data to. ( only tested with IP )
-- **intf_name:** the interface on that target specifically. ( only tested with ciscoishh intf name )
+- **remote_host:** address of the prometheus database.
+- **remote_port:** port on which the prometheus database listens.
+- **instance:** the SNMP target that you want the data for.
+- **intf_name:** the interface on that target specifically. ( only tested with cisco/juniperish intf name )
 - **series_in/series_out:** the series to look into. ( only tested with ifHCInOctets/ifHCOutOctets )
 
 Something like this for dual series
@@ -92,6 +92,22 @@ Something like this for dual series
 
 and with a single series:
 - `prometheus:proto:remote_host:remote_port:instance:intf_name:series_in`
+
+#### Free-text Queries:
+The datasource has been extended to allow free-text PromQL queries to Prometheus. This allows the use of any metric (not just network interfaces) and complex queries.
+
+This alternative target needs:
+- **datasource:** prometheus
+- **proto:** http|https
+- **remote_host:** address of the prometheus database.
+- **remote_port:** port on which the prometheus database listens.
+- **query_in/query_out:** the PromQL query to pass to Prometheus.
+
+Soething like this for a dual query:
+- `prometheus:proto:remote_host:remote_port:free_text_query_in:free_text_query_out`
+
+and with a single series:
+- `prometheus:proto:remote_host:remote_port:free_text_query_in`
 
 
 ## Adding the datasource to weathermap
@@ -118,6 +134,24 @@ LINK NODE1-NODE2
     NODES NODE1 NODE2
     TARGET prometheus:http:localhost:9090:192.168.178.32:Gi0/1:ifHCInOctets
 ```
+
+This example uases a free-text query to get the throughput of the busiest link in a LAG as a dual query, getting both In and Out:
+```
+LINK NODE1-NODE2
+    NODES NODE1 NODE2
+    TARGET prometheus:http:localhost:9090:max(irate(ifHCOutOctets{ifAlias=~".*ae232.*",instance="192.168.178.32"}[10m]))*8:max(irate(ifHCInOctets{ifAlias=~".*ae232.*",instance="192.168.178.32"}[10m]))*8
+```
+In this case we're identifying the interfaces that make up this LAG using a regex query on the ifAlias label.
+
+Modifed to use single query that gets the maximium of both In & Out throughput:
+```
+LINK NODE1-NODE2
+    NODES NODE1 NODE2
+    TARGET prometheus:http:localhost:9090:max(irate(ifHCOutOctets{ifAlias=~".*ae232.*",instance="192.168.178.32"}[10m]) or irate(ifHCOutOctets{ifAlias=~".*ae232.*",instance="192.168.178.32"}[10m]))*8
+```
+These free-text PromQL queries can be very powerful. However, they can be slow and expensive for your prometheus server to answer if they are too complex. So care should be taken when writing them so as not to overload your prometheus server.
+
+
 ## Generate your graph
 Use wmap like you would normally do, graphs should generate just fine.
 Here the only errors shown are normal given my setup, i don't need `snmp` or `rrd` modules from PHP.
@@ -193,7 +227,7 @@ I didn't make it on my very own, found the inspiration with those existing docs 
 
 ## Last words ?
 
-Fell free to test, report, patch, enjoy or hate it.
+Feel free to test, report, patch, enjoy or hate it.
 
 Cheers,
 Lodpp

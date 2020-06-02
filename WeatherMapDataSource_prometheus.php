@@ -29,11 +29,28 @@
 // or
 // - TARGET prometheus:http:localhost:9090:192.168.178.32:Gi0/1:ifHCInOctets
 
+
+// Extended to allow free-text Prometheus queries. This allows polling any Prometheus metric and
+// use of complex queries in targets.
+
+// In this case TARGET will look like:
+// prometheus:proto:remote_host:remote_port:free_text_query_in:free_text_query_out
+// or
+// prometheus:proto:remote_host:remote_port:free_text_query_in
+
+// This exmple shows how powerful this can be. It uses the max() with regex matching to poll the busiest 
+// link in a bundle on a given router, identified here by having 'ae232' in the interface description 
+// (which in this case show up as ifAlias).
+// - TARGET prometheus:http:localhost:9090:max(irate(ifHCOutOctets{ifAlias=~".*ae232.*",instance="192.168.178.32"}[10m]))*8:max(irate(ifHCInOctets{ifAlias=~".*ae232.*",instance="192.168.178.32"}[10m]))*8
+
 class WeatherMapDataSource_prometheus extends WeatherMapDataSource {
 
     // FIXME: regexes probably too permissive.
     private $prom_regex_single_value = '/^prometheus\:(http|https)\:([a-zA-z0-9-_.]+)\:(\d+)\:([a-zA-z0-9-_.]+)\:([^:]+)\:([^:]+)$/';
     private $prom_regex_dual_value   = '/^prometheus\:(http|https)\:([a-zA-z0-9-_.]+)\:(\d+)\:([a-zA-z0-9-_.]+)\:([^:]+)\:([^:]+)\:([^:]+)$/';
+    private $prom_regex_single_query = '/^prometheus\:(http|https)\:([a-zA-z0-9-_.]+)\:(\d+)\:([^:]+)$/';
+    private $prom_regex_dual_query   = '/^prometheus\:(http|https)\:([a-zA-z0-9-_.]+)\:(\d+)\:([^:]+)\:([^:]+)$/';
+
 
     function Init(&$map)
     {
@@ -46,7 +63,9 @@ class WeatherMapDataSource_prometheus extends WeatherMapDataSource {
     {
 
         if( preg_match($this->prom_regex_single_value,$targetstring,$matches) ||
-            preg_match($this->prom_regex_dual_value,$targetstring,$matches) )
+            preg_match($this->prom_regex_dual_value,$targetstring,$matches) ||
+            preg_match($this->prom_regex_single_query,$targetstring,$matches) ||
+            preg_match($this->prom_regex_dual_query,$targetstring,$matches) )
         {
             return TRUE;
         }
@@ -135,6 +154,44 @@ class WeatherMapDataSource_prometheus extends WeatherMapDataSource {
             $call = $url . $query;
             $inbw = $this->GetPromData($call);
     
+            $outbw = $inbw;
+        }
+        elseif(preg_match($this->prom_regex_dual_query,$targetstring,$matches))
+        {
+            // In and Out as free Prometheus queries
+            $proto       = $matches[1];
+            $remote_host = $matches[2];
+            $remote_port = $matches[3];
+            $in_query    = $matches[4];
+            $out_query   = $matches[5];
+
+            $url = $proto . '://' . $remote_host . ':' . $remote_port . '/api/v1/query?query=';
+
+            // IN
+            $query = urlencode($in_query);
+            $call = $url . $query;
+            $inbw = $this->GetPromData($call);
+
+            // OUT
+            $query = urlencode($out_query);
+            $call = $url . $query;
+            $outbw = $this->GetPromData($call);
+
+        }
+        elseif(preg_match($this->prom_regex_single_query,$targetstring,$matches))
+        {
+            // In and Out as free Prometheus queries
+            $proto       = $matches[1];
+            $remote_host = $matches[2];
+            $remote_port = $matches[3];
+            $in_query    = $matches[4];
+
+            $url = $proto . '://' . $remote_host . ':' . $remote_port . '/api/v1/query?query=';
+
+            $query = urlencode($in_query);
+            $call = $url . $query;
+            $inbw = $this->GetPromData($call);
+
             $outbw = $inbw;
         }
     
